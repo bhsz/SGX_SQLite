@@ -53,7 +53,7 @@ off_t lseek64(int fd, off_t offset, int whence){
     return ret;
 }
 
-int gettimeofday(struct timeval *tv, struct timezone *tz){
+int gettimeofday(struct timeval *tv, void *tz){
     char error_msg[256];
     snprintf(error_msg, sizeof(error_msg), "%s%s", "Error: no ocall implementation for ", __func__);
     ocall_print_error(error_msg);
@@ -225,6 +225,15 @@ int fcntl(int fd, int cmd, ... /* arg */ ){
         ocall_print_error(error_msg);
     }
     return ret;
+}
+
+int fcntl64(int fd, int cmd, ... /* arg */ ){
+    va_list valist;
+    va_start(valist, cmd);
+    void* arg = va_arg(valist, void*);
+    va_end(valist);
+
+    return fcntl(fd, cmd, arg);
 }
 
 ssize_t read(int fd, void *buf, size_t count){
