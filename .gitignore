@@ -18,3 +18,5 @@ Enclave/Enclave_t.*
 
 test.db
 test.db-journal
+
+.vscode

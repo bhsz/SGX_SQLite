@@ -39,6 +39,187 @@ void ecall_execute_sql(const char *sql){
     }
 }
 
+void ecall_read_customer(char *buf, size_t length){
+    (void)(length);
+    const char *sql = "SELECT * FROM Customer;";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, sql, strlen(sql), &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        ocall_print_string("SQLite error: ");
+        ocall_println_string(sqlite3_errmsg(db));
+        return;
+    }
+    
+    std::string res = "INSERT INTO Customer VALUES ";
+    bool is_first = true;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (is_first) {
+            is_first = false;
+        } else {
+            res += ",";
+        }
+
+        res += "(";
+        // custkey
+        res += std::to_string(sqlite3_column_int(stmt, 0));
+        res += ",";
+        // nationkey
+        res += std::to_string(sqlite3_column_int64(stmt, 1));
+        res += ",";
+        // acctbal
+        res += std::to_string(sqlite3_column_double(stmt, 2));
+        res += ",";
+        // name
+        res += '\'';
+        const char *name_ptr = (const char *)sqlite3_column_text(stmt, 3);
+        std::string name(name_ptr, strlen(name_ptr));
+        res += name;
+        res += '\'';
+        res += ",";
+        // mktsegment
+        res += '\'';
+        const char *mktsegment_ptr = (const char *)sqlite3_column_text(stmt, 4);
+        std::string mktsegment(mktsegment_ptr, strlen(mktsegment_ptr));
+        res += mktsegment;
+        res += '\'';
+        res += ")";
+    }
+    res += ";";
+
+    memcpy(buf, res.c_str(), res.size());
+
+    sqlite3_finalize(stmt);
+}
+
+void ecall_read_orders(char *buf, size_t length) {
+    (void)(length);
+    const char *sql = "SELECT * FROM Orders;";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, sql, strlen(sql), &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        ocall_print_string("SQLite error: ");
+        ocall_println_string(sqlite3_errmsg(db));
+        return;
+    }
+
+    std::string res = "INSERT INTO Orders VALUES ";
+    bool is_first = true;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (is_first) {
+            is_first = false;
+        } else {
+            res += ",";
+        }
+
+        res += "(";
+        // orderkey
+        res += std::to_string(sqlite3_column_int(stmt, 0));
+        res += ",";
+        // custkey
+        res += std::to_string(sqlite3_column_int64(stmt, 1));
+        res += ",";
+        // totalprice
+        res += std::to_string(sqlite3_column_double(stmt, 2));
+        res += ",";
+        // orderdate
+        res += '\'';
+        const char *date_ptr = (const char *)sqlite3_column_text(stmt, 3);
+        std::string date(date_ptr, strlen(date_ptr));
+        res += date;
+        res += '\'';
+        res += ",";
+        // shippingpriority
+        res += std::to_string(sqlite3_column_int(stmt, 4));
+        res += ")";
+    }
+    res += ";";
+
+    memcpy(buf, res.c_str(), res.size());
+
+    sqlite3_finalize(stmt);
+}
+
+void ecall_read_lineitem(char *buf, size_t length){
+    (void)(length);
+    const char *sql = "SELECT * FROM Lineitem;";
+
+    sqlite3_stmt *stmt;
+    int rc = sqlite3_prepare_v2(db, sql, strlen(sql), &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        ocall_print_string("SQLite error: ");
+        ocall_println_string(sqlite3_errmsg(db));
+        return;
+    }
+
+    std::string res = "INSERT INTO Lineitem VALUES ";
+    bool is_first = true;
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (is_first) {
+            is_first = false;
+        } else {
+            res += ",";
+        }
+
+        res += "(";
+        // orderkey
+        res += std::to_string(sqlite3_column_int64(stmt, 0));
+        res += ",";
+        // partkey
+        res += std::to_string(sqlite3_column_int64(stmt, 1));
+        res += ",";
+        // suppkey
+        res += std::to_string(sqlite3_column_int64(stmt, 2));
+        res += ",";
+        // returnflag
+        res += '\'';
+        const char *return_flag_ptr = (const char *)sqlite3_column_text(stmt, 3);
+        std::string return_flag(return_flag_ptr, strlen(return_flag_ptr));
+        res += return_flag;
+        res += '\'';
+        res += ",";
+        // linestatus
+        res += '\'';
+        const char *line_status_ptr = (const char *)sqlite3_column_text(stmt, 4);
+        std::string line_status(line_status_ptr, strlen(line_status_ptr));
+        res += line_status;
+        res += '\'';
+        res += ",";
+        // returnflag_int
+        res += std::to_string(sqlite3_column_int64(stmt, 5));
+        res += ",";
+        // linestatus_int
+        res += std::to_string(sqlite3_column_int64(stmt, 6));
+        res += ",";
+        // quantity
+        res += std::to_string(sqlite3_column_double(stmt, 7));
+        res += ",";
+        // extendedprice
+        res += std::to_string(sqlite3_column_double(stmt, 8));
+        res += ",";
+        // discount
+        res += std::to_string(sqlite3_column_double(stmt, 9));
+        res += ",";
+        // tax
+        res += std::to_string(sqlite3_column_double(stmt, 10));
+        res += ",";
+        // shipdate
+        res += '\'';
+        const char *ship_date_ptr = (const char *)sqlite3_column_text(stmt, 11);
+        std::string ship_date(ship_date_ptr, strlen(ship_date_ptr));
+        res += ship_date;
+        res += '\'';
+        
+        res += ")";
+    }
+    res += ";";
+
+    memcpy(buf, res.c_str(), res.size());
+
+    sqlite3_finalize(stmt);
+}
+
 void ecall_closedb(){
     sqlite3_close(db);
     ocall_println_string("Enclave: Closed database connection");
