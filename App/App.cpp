@@ -377,7 +377,7 @@ int main_single(void){
     init_tables(eid);
     // q1(eid);
     // q6(eid);
-    q18(eid);
+    // q18(eid);
 
     // Closing SQLite database inside enclave
     ret =  ecall_closedb(eid);
@@ -397,36 +397,6 @@ int main_single(void){
     return 0;
 }
 
-// void q1_multi(std::vector<sgx_enclave_id_t> eids) {
-//     sgx_status_t ret =  ecall_execute_sql(eid,
-//         "SELECT "
-//             "L_RETURNFLAG,"
-//             "L_LINESTATUS,"
-//             "sum(L_QUANTITY) AS SUM_QTY,"
-//             "sum(L_EXTENDEDPRICE) AS SUM_BASE_PRICE,"
-//             "sum(L_EXTENDEDPRICE * (1-L_DISCOUNT)) AS SUM_DISC_PRICE,"
-//             "sum(L_EXTENDEDPRICE * (1-L_DISCOUNT) * (1+L_TAX)) AS SUM_CHARGE,"
-//             "avg(L_QUANTITY) AS AVG_QTY,"
-//             "avg(L_EXTENDEDPRICE) AS AVG_PRICE,"
-//             "avg(L_DISCOUNT) AS AVG_DISC,"
-//             "count(*) AS COUNT_ORDER "
-//         "FROM "
-//             "Lineitem "
-//         "WHERE "
-//             "L_SHIPDATE < '1998-08-31' "
-//         "GROUP BY "
-//             "L_RETURNFLAG,"
-//             "L_LINESTATUS "
-//         "ORDER BY "
-//             "L_RETURNFLAG,"
-//             "L_LINESTATUS;"
-//     );
-//     if (ret != SGX_SUCCESS) {
-//         cerr << "Error: Making an ecall_execute_sql()" << endl;
-//         return;
-//     }
-// }
-
 int main_multi(void){
     const char* dbname = ":memory:";
 
@@ -441,24 +411,28 @@ int main_multi(void){
 
     // Initialize the enclave
     ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eid_1, NULL);
+    ecall_init(eid_1, eid_1);
     if (ret != SGX_SUCCESS) {
         cerr << "Error: creating enclave" << endl;
         return -1;
     }
     cout << "Info: SQLite SGX enclave successfully created." << endl;
     ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eid_2, NULL);
+    ecall_init(eid_2, eid_2);
     if (ret != SGX_SUCCESS) {
         cerr << "Error: creating enclave" << endl;
         return -1;
     }
     cout << "Info: SQLite SGX enclave successfully created." << endl;
     ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eid_3, NULL);
+    ecall_init(eid_3, eid_3);
     if (ret != SGX_SUCCESS) {
         cerr << "Error: creating enclave" << endl;
         return -1;
     }
     cout << "Info: SQLite SGX enclave successfully created." << endl;
     ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &main_eid, NULL);
+    ecall_init(main_eid, main_eid);
     if (ret != SGX_SUCCESS) {
         cerr << "Error: creating enclave" << endl;
         return -1;
@@ -480,21 +454,9 @@ int main_multi(void){
     char buf[500] = {'\0'};
 
     std::vector<sgx_enclave_id_t> tmp {eid_1, eid_2, eid_3};
-    for (auto eid : tmp) {
-        ecall_read_customer(eid, &buf[0], 500);
-        ecall_execute_sql(main_eid, buf);
-
-        ecall_read_orders(eid, &buf[0], 500);
-        ecall_execute_sql(main_eid, buf);
-
-        ecall_read_lineitem(eid, &buf[0], 500);
-        ecall_execute_sql(main_eid, buf);
-    }
-    ecall_execute_sql(main_eid, "SELECT * FROM Customer;");
-    ecall_execute_sql(main_eid, "SELECT * FROM Orders;");
-    ecall_execute_sql(main_eid, "SELECT * FROM Lineitem;");
-
-    // q1_multi(eids);
+    // ecall_q1(main_eid, tmp.data(), tmp.size());
+    // ecall_q6(main_eid, tmp.data(), tmp.size());
+    ecall_q18(main_eid, tmp.data(), tmp.size());
 
     // Closing SQLite database inside enclave
     for (auto eid : eids) {

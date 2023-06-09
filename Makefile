@@ -1,7 +1,7 @@
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk # Intel SGX directory
-SGX_MODE ?= SW # HW or SW (Hardware or Simulation mode)
+SGX_MODE ?= SIM # HW or SW (Hardware or Simulation mode)
 SGX_ARCH ?= x64 # x64 or x86
 SGX_DEBUG ?= 1 # DEBUG MODE
 
@@ -45,7 +45,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp
-App_Include_Paths := -IApp -I$(SGX_SDK)/include
+App_Include_Paths := -IApp -I$(SGX_SDK)/include -IInclude
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -70,7 +70,7 @@ else
 	App_Link_Flags += -lsgx_uae_service
 endif
 
-App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o) App/ocalls.o
+App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o) App/ocalls.o App/UntrustedMessageExchange.o
 
 App_Name := app
 
@@ -86,7 +86,7 @@ endif
 Crypto_Library_Name := sgx_tcrypto
 
 Enclave_Cpp_Files := Enclave/Enclave.cpp Enclave/sqlite3.c
-Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx
+Enclave_Include_Paths := -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/libcxx -IInclude
 
 Enclave_C_Flags := $(SGX_COMMON_CFLAGS) -nostdinc -fvisibility=hidden -fpie -ffunction-sections -fdata-sections -fstack-protector-strong
 Enclave_C_Flags += $(Enclave_Include_Paths)
@@ -107,7 +107,7 @@ Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefau
 	-Wl,--defsym,__ImageBase=0 -Wl,--gc-sections   \
 	-Wl,--version-script=Enclave/Enclave.lds
 
-Enclave_Cpp_Objects := Enclave/Enclave.o Enclave/sqlite3.o Enclave/ocall_interface.o
+Enclave_Cpp_Objects := Enclave/Enclave.o Enclave/sqlite3.o Enclave/ocall_interface.o Enclave/MessageExchange.o Enclave/Utility.o
 
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so
@@ -214,6 +214,14 @@ Enclave/Enclave.o: Enclave/Enclave.cpp
 	$(CXX) $(Enclave_Cpp_Flags) -c $< -o $@
 	@echo "CXX  <=  $<"
 
+Enclave/MessageExchange.o: Enclave/MessageExchange.cpp
+	$(CXX) $(Enclave_Cpp_Flags) -c $< -o $@
+	@echo "CXX  <=  $<"
+
+Enclave/Utility.o: Enclave/Utility.cpp
+	$(CXX) $(Enclave_Cpp_Flags) -c $< -o $@
+	@echo "CXX  <=  $<"
+
 # Preprocess sqlite3
 Enclave/sqlite3.i: Enclave/sqlite3.c
 	$(CC) -I$(SGX_SDK)/include -DSQLITE_THREADSAFE=0 -E $< -o $@
@@ -226,7 +234,7 @@ Enclave/sqlite3.o: Enclave/sqlite3.i Enclave/sqlite3.c
 
 # Preprocess sqlite3
 Enclave/ocall_interface.i: Enclave/ocall_interface.c
-	$(CC) -I$(SGX_SDK)/include -E $< -o $@
+	$(CC) -I$(SGX_SDK)/include -IInclude -E $< -o $@
 	@echo "CC-Preprocess  <=  $<"
 
 # Compile ocall_interface

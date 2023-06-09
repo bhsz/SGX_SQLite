@@ -1,6 +1,9 @@
 enclave {
     from "sgx_tstdc.edl" import *;
     include "../ocall_types.h" // Need to import some type declartions from stdlib
+    include "sgx_eid.h"
+    include "datatypes.h"
+    include "dh_session_protocol.h"
 
     trusted {
         public void ecall_opendb([in, string] const char *dbname); // open SQLite connection to dbname
@@ -8,9 +11,35 @@ enclave {
 
         public void ecall_read_customer([out, count = length] char *buf, size_t length);
         public void ecall_read_orders([out, count = length] char *buf, size_t length);
-        public void ecall_read_lineitem([out, count = length] char *buf, size_t length);
+        public void ecall_read_lineitem([out, count = length] char *buf, size_t length);    
+        public void ecall_q1([in, count = length] sgx_enclave_id_t* x, size_t length);
+        public void ecall_q6([in, count = length] sgx_enclave_id_t* x, size_t length);
+        public void ecall_q18([in, count = length] sgx_enclave_id_t* x, size_t length);
         
         public void ecall_closedb(void); // close SQLite db connection
+
+         // Local attestation responder
+        public uint32_t ecall_session_request(
+            [out] sgx_dh_msg1_t *dh_msg1,
+            sgx_enclave_id_t origin
+        );
+        public uint32_t ecall_end_session(sgx_enclave_id_t origin);
+        public uint32_t ecall_exchange_report(
+            [in] sgx_dh_msg2_t *dh_msg2,
+            [out] sgx_dh_msg3_t *dh_msg3,
+            sgx_enclave_id_t origin
+        );
+        public uint32_t ecall_generate_response(
+            [in, size = req_message_size] secure_message_t* req_message,
+            size_t req_message_size,
+            size_t max_payload_size,
+            [out, size=resp_message_size] secure_message_t* resp_message,
+            size_t resp_message_size,
+            sgx_enclave_id_t origin
+        );
+
+        public void ecall_init(sgx_enclave_id_t id);
+        public void ecall_shutdown(void);
     };
 
     untrusted {
@@ -36,5 +65,28 @@ enclave {
         int ocall_fsync(int fd);
         int ocall_fcntl(int fd, int cmd, [in, size=size] void* arg, size_t size) propagate_errno;
         int ocall_unlink([in, string] const char *pathname);
+
+        // Local attestation initiator
+        uint32_t ocall_session_request(
+            sgx_enclave_id_t target_enclave_id,
+            [out] sgx_dh_msg1_t *dh_msg1,
+            sgx_enclave_id_t origin
+        );
+        uint32_t ocall_exchange_report(
+            sgx_enclave_id_t target_enclave_id,
+            [in] sgx_dh_msg2_t *dh_msg2,
+            [out] sgx_dh_msg3_t *dh_msg3,
+            sgx_enclave_id_t origin
+        );
+        uint32_t ocall_send_request(
+            sgx_enclave_id_t target_enclave_id,
+            sgx_enclave_id_t origin,
+            [in, size = req_message_size] secure_message_t* req_message,
+            size_t req_message_size,
+            size_t max_payload_size,
+            [out, size=resp_message_size] secure_message_t* resp_message,
+            size_t resp_message_size
+        );
+        uint32_t ocall_end_session(sgx_enclave_id_t target_enclave_id, sgx_enclave_id_t origin);
     };
 };
