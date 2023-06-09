@@ -187,41 +187,35 @@ std::string read_lineitem(void) {
         // suppkey
         res += std::to_string(sqlite3_column_int64(stmt, 2));
         res += ",";
+        // quantity
+        res += std::to_string(sqlite3_column_double(stmt, 3));
+        res += ",";
+        // extendedprice
+        res += std::to_string(sqlite3_column_double(stmt, 4));
+        res += ",";
+        // discount
+        res += std::to_string(sqlite3_column_double(stmt, 5));
+        res += ",";
+        // tax
+        res += std::to_string(sqlite3_column_double(stmt, 6));
+        res += ",";
         // returnflag
         res += '\'';
-        const char *return_flag_ptr = (const char *)sqlite3_column_text(stmt, 3);
+        const char *return_flag_ptr = (const char *)sqlite3_column_text(stmt, 7);
         std::string return_flag(return_flag_ptr, strlen(return_flag_ptr));
         res += return_flag;
         res += '\'';
         res += ",";
         // linestatus
         res += '\'';
-        const char *line_status_ptr = (const char *)sqlite3_column_text(stmt, 4);
+        const char *line_status_ptr = (const char *)sqlite3_column_text(stmt, 8);
         std::string line_status(line_status_ptr, strlen(line_status_ptr));
         res += line_status;
         res += '\'';
         res += ",";
-        // returnflag_int
-        res += std::to_string(sqlite3_column_int64(stmt, 5));
-        res += ",";
-        // linestatus_int
-        res += std::to_string(sqlite3_column_int64(stmt, 6));
-        res += ",";
-        // quantity
-        res += std::to_string(sqlite3_column_double(stmt, 7));
-        res += ",";
-        // extendedprice
-        res += std::to_string(sqlite3_column_double(stmt, 8));
-        res += ",";
-        // discount
-        res += std::to_string(sqlite3_column_double(stmt, 9));
-        res += ",";
-        // tax
-        res += std::to_string(sqlite3_column_double(stmt, 10));
-        res += ",";
         // shipdate
         res += '\'';
-        const char *ship_date_ptr = (const char *)sqlite3_column_text(stmt, 11);
+        const char *ship_date_ptr = (const char *)sqlite3_column_text(stmt, 9);
         std::string ship_date(ship_date_ptr, strlen(ship_date_ptr));
         res += ship_date;
         res += '\'';
@@ -262,7 +256,7 @@ ATTESTATION_STATUS bifrost(sgx_enclave_id_t target, char** res, uint32_t target_
     char* secret_response;
 
     msg_type = MESSAGE_EXCHANGE;
-    max_out_buff_size = 4096; // 4KB
+    max_out_buff_size = 7000000; // 7MB
     
     ke_status = marshal_message_exchange_request(
         target_fn_id, msg_type,
