@@ -157,39 +157,39 @@ void init_tables(sgx_enclave_id_t eid, std::string base) {
         return;
     }
 
-    // std::ifstream orders((base + "orders.tbl").c_str());
-    // std::unordered_set<int> orders_col_idx {
-    //     0, 1, 3, 4, 7
-    // };
-    // std::unordered_set<int> orders_str_col {
-    //     4
-    // };
-    // ret =  ecall_execute_sql(eid,
-    //     read_table(
-    //         orders, dummy - 1, "Orders", orders_col_idx, orders_str_col
-    //     ).c_str()
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
+    std::ifstream orders((base + "orders.tbl").c_str());
+    std::unordered_set<int> orders_col_idx {
+        0, 1, 3, 4, 7
+    };
+    std::unordered_set<int> orders_str_col {
+        4
+    };
+    ret =  ecall_execute_sql(eid,
+        read_table(
+            orders, dummy - 1, "Orders", orders_col_idx, orders_str_col
+        ).c_str()
+    );
+    if (ret != SGX_SUCCESS) {
+        std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+        return;
+    }
 
-    // std::ifstream customer((base + "customer.tbl").c_str());
-    // std::unordered_set<int> customer_col_idx {
-    //     0, 1, 3, 5, 6
-    // };
-    // std::unordered_set<int> customer_str_col {
-    //     1, 6
-    // };
-    // ret =  ecall_execute_sql(eid,
-    //     read_table(
-    //         customer, dummy - 1, "Customer", customer_col_idx, customer_str_col
-    //     ).c_str()
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
+    std::ifstream customer((base + "customer.tbl").c_str());
+    std::unordered_set<int> customer_col_idx {
+        0, 1, 3, 5, 6
+    };
+    std::unordered_set<int> customer_str_col {
+        1, 6
+    };
+    ret =  ecall_execute_sql(eid,
+        read_table(
+            customer, dummy - 1, "Customer", customer_col_idx, customer_str_col
+        ).c_str()
+    );
+    if (ret != SGX_SUCCESS) {
+        std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+        return;
+    }
 }
 
 void init_tables_multi(std::vector<sgx_enclave_id_t> eids) {
@@ -358,64 +358,78 @@ void q1(sgx_enclave_id_t eid, long size) {
     }
 }
 
-void q6(sgx_enclave_id_t eid) {
-    sgx_status_t ret =  ecall_execute_sql(eid,
-        "SELECT "
-            "SUM(L_EXTENDEDPRICE * L_DISCOUNT) AS REVENUE "
-        "FROM "
-            "Lineitem "
-        "WHERE "
-            "L_SHIPDATE > '1993-12-31' "
-            "AND L_SHIPDATE < '1995-01-01' "
-            "AND L_DISCOUNT > 0.0499 "
-            "AND L_DISCOUNT < 0.07001 "
-            "AND L_QUANTITY < 24;"
+void q6(sgx_enclave_id_t eid, long size) {
+    __itt_string_handle* handle = __itt_string_handle_create(
+        ("Q6 [Single enclave] - " + std::to_string(size) + "MB").c_str()
     );
-    if (ret != SGX_SUCCESS) {
-        std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-        return;
+    for (int i = 0; i < 3; i++) {
+        __itt_task_begin(domain, __itt_null, __itt_null, handle);
+        sgx_status_t ret =  ecall_execute_sql(eid,
+            "SELECT "
+                "SUM(L_EXTENDEDPRICE * L_DISCOUNT) AS REVENUE "
+            "FROM "
+                "Lineitem "
+            "WHERE "
+                "L_SHIPDATE > '1993-12-31' "
+                "AND L_SHIPDATE < '1995-01-01' "
+                "AND L_DISCOUNT > 0.0499 "
+                "AND L_DISCOUNT < 0.07001 "
+                "AND L_QUANTITY < 24;"
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
+        __itt_task_end(domain);
     }
 }
 
-void q18(sgx_enclave_id_t eid) {
-    sgx_status_t ret =  ecall_execute_sql(eid,
-        "SELECT "
-            "C_NAME,"
-            "C_CUSTKEY,"
-            "O_ORDERKEY,"
-            "O_ORDERDATE,"
-            "O_TOTALPRICE,"
-            "SUM(L_QUANTITY) "
-        "FROM "
-            "Customer,"
-            "Orders,"
-            "Lineitem "
-        "WHERE "
-            "O_ORDERKEY IN ("
-                "SELECT "
-                    "L_ORDERKEY "
-                "FROM "
-                    "Lineitem "
-                "GROUP BY "
-                    "L_ORDERKEY HAVING "
-                        "SUM(L_QUANTITY) > 1.0"
-            ") "
-            "AND C_CUSTKEY = O_CUSTKEY "
-            "AND O_ORDERKEY = L_ORDERKEY "
-        "GROUP BY "
-            "C_NAME,"
-            "C_CUSTKEY,"
-            "O_ORDERKEY,"
-            "O_ORDERDATE,"
-            "O_TOTALPRICE "
-        "ORDER BY "
-            "O_TOTALPRICE,"
-            "O_ORDERDATE "
-        "LIMIT 3;"
+void q18(sgx_enclave_id_t eid, long size) {
+    __itt_string_handle* handle = __itt_string_handle_create(
+        ("Q18 [Single enclave] - " + std::to_string(size) + "MB").c_str()
     );
-    if (ret != SGX_SUCCESS) {
-        std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-        return;
+    for (int i = 0; i < 3; i++) {
+        __itt_task_begin(domain, __itt_null, __itt_null, handle);
+        sgx_status_t ret =  ecall_execute_sql(eid,
+            "SELECT "
+                "C_NAME,"
+                "C_CUSTKEY,"
+                "O_ORDERKEY,"
+                "O_ORDERDATE,"
+                "O_TOTALPRICE,"
+                "SUM(L_QUANTITY) "
+            "FROM "
+                "Customer,"
+                "Orders,"
+                "Lineitem "
+            "WHERE "
+                "O_ORDERKEY IN ("
+                    "SELECT "
+                        "L_ORDERKEY "
+                    "FROM "
+                        "Lineitem "
+                    "GROUP BY "
+                        "L_ORDERKEY HAVING "
+                            "SUM(L_QUANTITY) > 1.0"
+                ") "
+                "AND C_CUSTKEY = O_CUSTKEY "
+                "AND O_ORDERKEY = L_ORDERKEY "
+            "GROUP BY "
+                "C_NAME,"
+                "C_CUSTKEY,"
+                "O_ORDERKEY,"
+                "O_ORDERDATE,"
+                "O_TOTALPRICE "
+            "ORDER BY "
+                "O_TOTALPRICE,"
+                "O_ORDERDATE "
+            "LIMIT 3;"
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
+        __itt_task_end(domain);
     }
 }
 
@@ -445,9 +459,9 @@ int main_single(void){
     }
 
     init_tables(eid, "/home/bhsz/fyp/MultiKernelBenchmarks/data/tpch_256MB/");
-    q1(eid, 256);
+    // q1(eid, 256);
     // q6(eid);
-    // q18(eid);
+    q18(eid, 256);
 
     // Closing SQLite database inside enclave
     ret =  ecall_closedb(eid);

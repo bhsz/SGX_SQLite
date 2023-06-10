@@ -85,3 +85,7 @@ int ocall_fsync(int fd){
     //printf("Entering %s\n", __func__);
     return fsync(fd);
 }
+
+int ocall_access(const char *pathname, int mode){
+    return access(pathname, mode);
+}

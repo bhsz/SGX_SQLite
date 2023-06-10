@@ -65,6 +65,7 @@ enclave {
         int ocall_fsync(int fd);
         int ocall_fcntl(int fd, int cmd, [in, size=size] void* arg, size_t size) propagate_errno;
         int ocall_unlink([in, string] const char *pathname);
+        int ocall_access([in, string] const char *pathname, int mode);
 
         // Local attestation initiator
         uint32_t ocall_session_request(
