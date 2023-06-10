@@ -45,7 +45,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp
-App_Include_Paths := -IApp -I$(SGX_SDK)/include -IInclude
+App_Include_Paths := -IApp -I$(SGX_SDK)/include -IInclude -I/opt/intel/oneapi/vtune/2023.1.0/sdk/include
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -190,7 +190,8 @@ App/%.o: App/%.cpp
 
 # Link and generate main Application executable
 $(App_Name): App/Enclave_u.o App/ocalls.o $(App_Cpp_Objects)
-	$(CXX) $^ -o $@ $(App_Link_Flags)
+	$(CXX) -L/opt/intel/oneapi/vtune/2023.1.0/sdk/lib64 \
+	$^ -littnotify -ldl -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
 
 .config_$(Build_Mode)_$(SGX_ARCH):
