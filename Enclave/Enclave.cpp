@@ -328,7 +328,7 @@ void ecall_q1(sgx_enclave_id_t *shared_eids, size_t length) {
         }
     }
 
-    ocall_println_string("Exectuing Q1");
+    ocall_println_string("Executing Q1");
     rc = sqlite3_exec(
         db,
         "SELECT "
@@ -382,7 +382,7 @@ void ecall_q6(sgx_enclave_id_t *shared_eids, size_t length) {
         }
     }
 
-    ocall_println_string("Exectuing Q6");
+    ocall_println_string("Executing Q6");
     rc = sqlite3_exec(
         db,
         "SELECT "
@@ -429,7 +429,7 @@ void ecall_q18(sgx_enclave_id_t *shared_eids, size_t length) {
         }
     }
 
-    ocall_println_string("Exectuing Q18");
+    ocall_println_string("Executing Q18");
     rc = sqlite3_exec(
         db,
         "SELECT "

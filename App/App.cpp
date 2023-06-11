@@ -6,11 +6,33 @@
 #include <unordered_set>
 #include <fstream>
 #include <ittnotify.h>
+#include <stdexcept>
+#include <cmath>
 
 # define MAX_PATH FILENAME_MAX
 # define ENCLAVE_FILENAME "enclave.signed.so"
 
 __itt_domain* domain = __itt_domain_create("SGX.SQLite.Global");
+
+std::unordered_set<int> lineitem_col_idx {
+    0, 1, 2, 4, 5, 6, 7, 8, 9, 10
+};
+std::unordered_set<int> lineitem_str_col {
+    8, 9, 10
+};
+std::unordered_set<int> orders_col_idx {
+    0, 1, 3, 4, 7
+};
+std::unordered_set<int> orders_str_col {
+    4
+};
+std::unordered_set<int> customer_col_idx {
+    0, 1, 3, 5, 6
+};
+std::unordered_set<int> customer_str_col {
+    1, 6
+};
+
 
 // ocalls for printing string (C++ ocalls)
 void ocall_print_error(const char *str){
@@ -25,8 +47,51 @@ void ocall_println_string(const char *str){
     std::cout << str << std::endl;
 }
 
+long count_lines(std::string path) {
+    std::ifstream lineitem(path);
+    size_t total = 0;
+
+    std::string line;
+    while (std::getline(lineitem, line)) {
+        total++;
+    }
+
+    return total;
+}
+
+std::vector<long> uniform_partition(long total, int n) {
+    std::vector<long> res;
+    long one = (total / n);
+
+    for (auto i = 0; i < n - 1; i++) {
+        res.push_back(one);
+        total -= one;
+    }
+    res.push_back(total);
+
+    return res;
+}
+
+std::vector<long> zipfian_partition(long total, int n) {
+    int num_parts = (std::pow(2, n) - 1);
+    long one = (total / num_parts);
+
+    int mult = 1;
+    std::vector<long> res;
+
+    for (auto i = 0; i < n - 1; i++) {
+        long curr = one * mult;
+        res.push_back(curr);
+        mult *= 2;
+        total -= curr;
+    }
+    res.push_back(total);
+    
+    return res;
+}
+
 std::string read_table(
-    std::ifstream& lineitem,
+    std::ifstream& file,
     size_t num_rows,
     std::string tableName,
     std::unordered_set<int>& col_idx,
@@ -39,7 +104,7 @@ std::string read_table(
 
     size_t row = 0;
     std::string accum;
-    while (row++ < num_rows && std::getline(lineitem, line)) {
+    while (row++ < num_rows && std::getline(file, line)) {
         std::string curr = "(";
         int col = 0;
         size_t pos = 0;
@@ -141,12 +206,6 @@ void init_tables(sgx_enclave_id_t eid, std::string base) {
     size_t dummy = 0;
 
     std::ifstream lineitem((base + "lineitem.tbl").c_str());
-    std::unordered_set<int> lineitem_col_idx {
-        0, 1, 2, 4, 5, 6, 7, 8, 9, 10
-    };
-    std::unordered_set<int> lineitem_str_col {
-        8, 9, 10
-    };
     ret =  ecall_execute_sql(eid,
         read_table(
             lineitem, dummy - 1, "Lineitem", lineitem_col_idx, lineitem_str_col
@@ -158,12 +217,6 @@ void init_tables(sgx_enclave_id_t eid, std::string base) {
     }
 
     std::ifstream orders((base + "orders.tbl").c_str());
-    std::unordered_set<int> orders_col_idx {
-        0, 1, 3, 4, 7
-    };
-    std::unordered_set<int> orders_str_col {
-        4
-    };
     ret =  ecall_execute_sql(eid,
         read_table(
             orders, dummy - 1, "Orders", orders_col_idx, orders_str_col
@@ -175,12 +228,6 @@ void init_tables(sgx_enclave_id_t eid, std::string base) {
     }
 
     std::ifstream customer((base + "customer.tbl").c_str());
-    std::unordered_set<int> customer_col_idx {
-        0, 1, 3, 5, 6
-    };
-    std::unordered_set<int> customer_str_col {
-        1, 6
-    };
     ret =  ecall_execute_sql(eid,
         read_table(
             customer, dummy - 1, "Customer", customer_col_idx, customer_str_col
@@ -192,10 +239,68 @@ void init_tables(sgx_enclave_id_t eid, std::string base) {
     }
 }
 
-void init_tables_multi(std::vector<sgx_enclave_id_t> eids) {
+void init_tables_multi(
+    std::vector<sgx_enclave_id_t> eids,
+    std::string base,
+    const std::vector<long>& lineitem_partitions,
+    const std::vector<long>& orders_partitions,
+    const std::vector<long>& customer_partitions
+) {
+    if (
+        (eids.size() != lineitem_partitions.size()) || 
+        (eids.size() != orders_partitions.size()) ||
+        (eids.size() != customer_partitions.size())
+    ) {
+        throw std::logic_error("Enclave and partition size mismatch");
+    }
+
+    std::cout << "Lineitem - ";
+    for (auto p : lineitem_partitions) {
+        std::cout << p << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Orders - ";
+    for (auto p : orders_partitions) {
+        std::cout << p << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Customer - ";
+    for (auto p : customer_partitions) {
+        std::cout << p << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << std::endl;
+
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
 
     for (auto eid : eids) {
+        ret =  ecall_execute_sql(eid,
+            "PRAGMA page_size = 65536"
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
+
+        ret =  ecall_execute_sql(eid,
+            "PRAGMA max_page_count = 19530"
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
+
+        ret =  ecall_execute_sql(eid,
+            "PRAGMA cache_size = 4000"
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
+
         ret =  ecall_execute_sql(eid,
             "CREATE TABLE Lineitem ("
                 "L_ORDERKEY		BIGINT NOT NULL,"
@@ -229,7 +334,6 @@ void init_tables_multi(std::vector<sgx_enclave_id_t> eids) {
             return;
         }
 
-        
         ret =  ecall_execute_sql(eid,
             "CREATE TABLE Orders ("
                 "O_ORDERKEY		INT,"
@@ -245,80 +349,40 @@ void init_tables_multi(std::vector<sgx_enclave_id_t> eids) {
         }
     }
 
-    // auto eid_1 = eids[0];
-    // auto eid_2 = eids[1];
-    // auto eid_3 = eids[2];
+    for (auto i = 0; i < eids.size(); i++) {
+        std::ifstream lineitem((base + "lineitem.tbl").c_str());
+        ret =  ecall_execute_sql(eids[i],
+            read_table(
+                lineitem, lineitem_partitions[i], "Lineitem", lineitem_col_idx, lineitem_str_col
+            ).c_str()
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
 
-    // ret =  ecall_execute_sql(eid_2,
-    //     "INSERT INTO Lineitem VALUES"
-    //         "(2, 3, 3, 'A', 'F', 65, 70, 8, 7712.48, 0.06, 0.02, '1996-02-28'),"
-    //         "(3, 4, 4, 'A', 'F', 65, 70, 5, 25284.00, 0.06, 0.06, '1994-12-31');"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
-    // ret =  ecall_execute_sql(eid_3,
-    //     "INSERT INTO Lineitem VALUES"
-    //         "(1, 1, 1, 'N', 'O', 78, 79, 17, 17954.55, 0.10, 0.02, '1992-03-13'),"
-    //         "(1, 2, 2, 'N', 'O', 78, 79, 21, 34850.16, 0.05, 0.06, '1994-04-12');"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
+        std::ifstream orders((base + "orders.tbl").c_str());
+        ret =  ecall_execute_sql(eids[i],
+            read_table(
+                orders, orders_partitions[i], "Orders", orders_col_idx, orders_str_col
+            ).c_str()
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
 
-    // ret =  ecall_execute_sql(eid_1,
-    //    "INSERT INTO Customer VALUES"
-    //         "(1, 1, 7498.12, 'Customer#000000003', 'HOUSEHOLD');"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
-    // ret =  ecall_execute_sql(eid_2,
-    //    "INSERT INTO Customer VALUES"
-    //         "(4, 15, 711.56, 'Customer#000000001', 'AUTOMOBILE'),"
-    //         "(4, 4, 2866.83, 'Customer#000000004', 'BUILDING');"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
-    // ret =  ecall_execute_sql(eid_3,
-    //    "INSERT INTO Customer VALUES"
-    //         "(7, 13, 121.65, 'Customer#000000002', 'MACHINERY');"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
-
-    // ret =  ecall_execute_sql(eid_1,
-    //     "INSERT INTO Orders VALUES"
-    //         "(1, 4, 178821.73, '1998-01-24', 1),"
-    //         "(1, 7, 154260.84, '1992-05-01', 1);"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
-    // ret =  ecall_execute_sql(eid_2,
-    //     "INSERT INTO Orders VALUES"
-    //         "(2, 1, 202660.52, '1992-12-21', 1);"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
-    // ret =  ecall_execute_sql(eid_3,
-    //     "INSERT INTO Orders VALUES"
-    //         "(3, 4, 155680.60, '1994-06-18', 1);"
-    // );
-    // if (ret != SGX_SUCCESS) {
-    //     std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //     return;
-    // }
+        std::ifstream customer((base + "customer.tbl").c_str());
+        ret =  ecall_execute_sql(eids[i],
+            read_table(
+                customer, customer_partitions[i], "Customer", customer_col_idx, customer_str_col
+            ).c_str()
+        );
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
+            return;
+        }
+    }
 }
 
 void q1(sgx_enclave_id_t eid, long size) {
@@ -326,6 +390,7 @@ void q1(sgx_enclave_id_t eid, long size) {
         ("Q1 [Single enclave] - " + std::to_string(size) + "MB").c_str()
     );
     for (int i = 0; i < 3; i++) {
+        __itt_resume();
         __itt_task_begin(domain, __itt_null, __itt_null, handle);
         sgx_status_t ret =  ecall_execute_sql(eid,
             "SELECT "
@@ -350,11 +415,12 @@ void q1(sgx_enclave_id_t eid, long size) {
                 "L_RETURNFLAG,"
                 "L_LINESTATUS;"
         );
+        __itt_task_end(domain);
+        __itt_pause();
         if (ret != SGX_SUCCESS) {
             std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
             return;
         }
-        __itt_task_end(domain);
     }
 }
 
@@ -363,6 +429,7 @@ void q6(sgx_enclave_id_t eid, long size) {
         ("Q6 [Single enclave] - " + std::to_string(size) + "MB").c_str()
     );
     for (int i = 0; i < 3; i++) {
+        __itt_resume();
         __itt_task_begin(domain, __itt_null, __itt_null, handle);
         sgx_status_t ret =  ecall_execute_sql(eid,
             "SELECT "
@@ -376,11 +443,12 @@ void q6(sgx_enclave_id_t eid, long size) {
                 "AND L_DISCOUNT < 0.07001 "
                 "AND L_QUANTITY < 24;"
         );
+        __itt_task_end(domain);
+        __itt_pause();
         if (ret != SGX_SUCCESS) {
             std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
             return;
         }
-        __itt_task_end(domain);
     }
 }
 
@@ -389,6 +457,7 @@ void q18(sgx_enclave_id_t eid, long size) {
         ("Q18 [Single enclave] - " + std::to_string(size) + "MB").c_str()
     );
     for (int i = 0; i < 3; i++) {
+        __itt_resume();
         __itt_task_begin(domain, __itt_null, __itt_null, handle);
         sgx_status_t ret =  ecall_execute_sql(eid,
             "SELECT "
@@ -425,11 +494,12 @@ void q18(sgx_enclave_id_t eid, long size) {
                 "O_ORDERDATE "
             "LIMIT 3;"
         );
+        __itt_task_end(domain);
+        __itt_pause();
         if (ret != SGX_SUCCESS) {
             std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
             return;
         }
-        __itt_task_end(domain);
     }
 }
 
@@ -437,7 +507,7 @@ int main_single(void){
     const char* dbname = ":memory:";
 
     sgx_enclave_id_t eid = 0;
-    char token_path[MAX_PATH] = {'\0'};
+    
     sgx_launch_token_t token = {0};
     sgx_status_t ret = SGX_ERROR_UNEXPECTED; // status flag for enclave calls
     int updated = 0;
@@ -458,10 +528,10 @@ int main_single(void){
         return -1;
     }
 
-    init_tables(eid, "/home/bhsz/fyp/MultiKernelBenchmarks/data/tpch_256MB/");
+    // init_tables(eid, "/home/bhsz/fyp/MultiKernelBenchmarks/data/tpch_256MB/");
     // q1(eid, 256);
     // q6(eid);
-    q18(eid, 256);
+    // q18(eid, 256);
 
     // Closing SQLite database inside enclave
     ret =  ecall_closedb(eid);
@@ -481,49 +551,24 @@ int main_single(void){
     return 0;
 }
 
-int main_multi(void){
+int main_multi(int n_enclaves, std::string size, int q_to_run, bool use_zipf = false) {
     const char* dbname = ":memory:";
 
-    sgx_enclave_id_t eid_1 = 0;
-    sgx_enclave_id_t eid_2 = 0;
-    sgx_enclave_id_t eid_3 = 0;
-    sgx_enclave_id_t main_eid = 0;
-    char token_path[MAX_PATH] = {'\0'};
+    sgx_enclave_id_t eids[n_enclaves];
+
     sgx_launch_token_t token = {0};
-    sgx_status_t ret = SGX_ERROR_UNEXPECTED; // status flag for enclave calls
     int updated = 0;
+    sgx_status_t ret = SGX_ERROR_UNEXPECTED;
 
-    // Initialize the enclave
-    ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eid_1, NULL);
-    ecall_init(eid_1, eid_1);
-    if (ret != SGX_SUCCESS) {
-        std::cerr << "Error: creating enclave" << std::endl;
-        return -1;
-    }
-    std::cout << "Info: SQLite SGX enclave successfully created." << std::endl;
-    ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eid_2, NULL);
-    ecall_init(eid_2, eid_2);
-    if (ret != SGX_SUCCESS) {
-        std::cerr << "Error: creating enclave" << std::endl;
-        return -1;
-    }
-    std::cout << "Info: SQLite SGX enclave successfully created." << std::endl;
-    ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eid_3, NULL);
-    ecall_init(eid_3, eid_3);
-    if (ret != SGX_SUCCESS) {
-        std::cerr << "Error: creating enclave" << std::endl;
-        return -1;
-    }
-    std::cout << "Info: SQLite SGX enclave successfully created." << std::endl;
-    ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &main_eid, NULL);
-    ecall_init(main_eid, main_eid);
-    if (ret != SGX_SUCCESS) {
-        std::cerr << "Error: creating enclave" << std::endl;
-        return -1;
-    }
-    std::cout << "Info: SQLite SGX enclave successfully created." << std::endl;
-
-    std::vector<sgx_enclave_id_t> eids {eid_1, eid_2, eid_3, main_eid};
+    // Initialize the enclaves
+    for (auto i = 0; i < n_enclaves; i++) {
+        ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &eids[i], NULL);
+        ecall_init(eids[i], eids[i]);
+        if (ret != SGX_SUCCESS) {
+            std::cerr << "Error: creating enclave" << std::endl;
+            return -1;
+        }
+    }       
 
     // Open SQLite database
     for (auto eid : eids) {
@@ -534,18 +579,67 @@ int main_multi(void){
         }
     }
 
-    init_tables_multi(eids);
-
-    // std::vector<sgx_enclave_id_t> tmp {eid_1, eid_2, eid_3};
-    // std::ifstream lineitem("/home/bhsz/fyp/MultiKernelBenchmarks/data/tpch_16MB/lineitem.tbl");
-    // for (auto eid : tmp) {
-    //     ret = ecall_execute_sql(eid, read_lineitem(lineitem, 32114).c_str());
-    //     if (ret != SGX_SUCCESS) {
-    //         std::cerr << "Error: Making an ecall_execute_sql()" << std::endl;
-    //         return -1;
-    //     }
-    // }
-    // ecall_q1(main_eid, tmp.data(), tmp.size());
+    std::vector<sgx_enclave_id_t> tmp(eids, eids + n_enclaves);
+    std::string base = "/home/bhsz/fyp/MultiKernelBenchmarks/data/tpch_" + size + "MB/";
+    init_tables_multi(
+        tmp,
+        base,
+        (use_zipf)
+            ? zipfian_partition(count_lines(base + "lineitem.tbl"), n_enclaves)
+            : uniform_partition(count_lines(base + "lineitem.tbl"), n_enclaves),
+        (use_zipf)
+            ? zipfian_partition(count_lines(base + "orders.tbl"), n_enclaves)
+            : uniform_partition(count_lines(base + "orders.tbl"), n_enclaves),
+        (use_zipf)
+            ? zipfian_partition(count_lines(base + "customer.tbl"), n_enclaves)
+            : uniform_partition(count_lines(base + "customer.tbl"), n_enclaves)
+    );
+    
+    if (q_to_run == 1) {
+         __itt_string_handle* handle = __itt_string_handle_create(
+            (
+                std::string("Q1")
+                + ((use_zipf) ? " zipf " : " uniform ")
+                + std::to_string(n_enclaves) + " enclaves "
+                + size + "MB"
+            ).c_str()
+        );
+        __itt_resume();
+        __itt_task_begin(domain, __itt_null, __itt_null, handle);
+        ecall_q1(eids[0], &eids[1], n_enclaves - 1);
+        __itt_task_end(domain);
+        __itt_pause();
+    } else if (q_to_run == 6) {
+        __itt_string_handle* handle = __itt_string_handle_create(
+            (
+                std::string("Q6")
+                + ((use_zipf) ? " zipf " : " uniform ")
+                + std::to_string(n_enclaves) + " enclaves "
+                + size + "MB"
+            ).c_str()
+        );
+        __itt_resume();
+        __itt_task_begin(domain, __itt_null, __itt_null, handle);
+        ecall_q6(eids[0], &eids[1], n_enclaves - 1);
+        __itt_task_end(domain);
+        __itt_pause();
+    } else if (q_to_run == 18) {
+        __itt_string_handle* handle = __itt_string_handle_create(
+            (
+                std::string("Q18")
+                + ((use_zipf) ? " zipf " : " uniform ")
+                + std::to_string(n_enclaves) + " enclaves "
+                + size + "MB"
+            ).c_str()
+        );
+        __itt_resume();
+        __itt_task_begin(domain, __itt_null, __itt_null, handle);
+        ecall_q6(eids[0], &eids[1], n_enclaves - 1);
+        __itt_task_end(domain);
+        __itt_pause();
+    } else {
+        throw std::invalid_argument("No such query supported");
+    }
 
     // Closing SQLite database inside enclave
     for (auto eid : eids) {
@@ -569,7 +663,19 @@ int main_multi(void){
     return 0;
 }
 
-int main(void) {
-    return main_single();
-    // return main_multi();
+int main(int argc, char** argv) {
+    __itt_pause();
+
+    if (argc != 5) {
+        std::cout << "n_enclaves size query_to_run use_zipf" << std::endl;
+        return -1;
+    }
+
+    // return main_single();
+    return main_multi(
+        std::stoi(std::string(argv[1])),
+        std::string(argv[2]),
+        std::stoi(std::string(argv[3])),
+        (std::string(argv[4]) == "1")
+    );
 }
